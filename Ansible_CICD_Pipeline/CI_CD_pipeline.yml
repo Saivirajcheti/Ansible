@@ -1,0 +1,83 @@
+---
+- name: Installing the required softwares for DEV server.
+  hosts: DEV
+  tasks:
+    - name: Installing Softwares like GIT,JAVA,MAVEN through apt module
+      apt:
+        name: "{{item.a}}"
+        state: present
+        update_cache: "{{item.b}}"
+      with_items:
+        - {a: openjdk-11-jdk,b: yes} 
+        - {a: git,b: no}
+        - {a: maven,b: no} 
+          
+- name: Installing the required softwares for QA server.
+  hosts: QA
+  tasks:
+    - name: Installing softwares like GIT,JAVA,TOMCAT10,TOMCAT10-ADMIN through apt module
+      apt:
+        name: "{{item.a}}"
+        state: present
+        update_cache: "{{item.b}}"
+      with_items:
+        - {a: openjdk-11-jdk,b: yes}
+        - {a: git,b: no}
+        - {a: tomcat10,b: no}
+        - {a: tomcat10-admin,b: no}
+
+- name: Installing the required softwares for PROD server.
+  hosts: PROD
+  tasks: 
+    - name: Installing softwares like TOMCAT10 and TOMCAT10-ADMIN through apt module
+      apt:
+        name: "{{item.a}}"
+        state: present
+        update_cache: "{{item.b}}"
+      with_items:
+        - {a: tomcat10,b: yes}
+        - {a: tomcat10-admin,b: no}
+          
+- name: Continous Download and build artifact on DEV server
+  hosts: DEV
+  tasks:
+    - name: Continous Downdload through GIT module
+      git:
+        repo: https://github.com/Saivirajcheti/maven.git
+        dest: dev-git
+    - name: Continous build through shell module
+      shell: cd dev-git/Maven;mvn package
+    - name: Copying the Artifact from DEV i.e. from Managed nodes to Controller node using FETCH module
+      fetch:
+        src: dev-git/Maven/webapp/target/webapp.war
+        dest: /tmp
+
+- name: Continous deployment and Continous testing on QA server
+  hosts: QA
+  tasks:
+    - name: Copying Artfact from Controller to QA server
+      copy:
+        src: /tmp/172.31.39.71/dev-git/Maven/webapp/target/webapp.war
+        dest: /var/lib/tomcat10/webapps/testapp.war
+    - name: Downloading Test code from git repo given by Testers
+      git:
+        repo: https://github.com/Saivirajcheti/Test.git
+        dest: test-git 
+    - name: Bring the selenium scrips into active
+      shell: java -jar test-git/testing.jar
+
+- name: Continous delivery and Continous testing on PROD server
+  hosts: PROD
+  tasks:
+    - name: Copying Artfact from Controller to PROD server
+      copy:
+        src: /tmp/172.31.39.71/dev-git/Maven/webapp/target/webapp.war
+        dest: /var/lib/tomcat10/webapps/prodapp.war
+    - name: Checking URL response using URI module
+      uri:
+        url: "{{item}}"
+        status_code: 200
+      with_items:
+        - http://13.127.45.44:8080/testapp
+        - http://3.6.40.134:8080/prodapp
+...
